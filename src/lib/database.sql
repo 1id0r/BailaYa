@@ -5,6 +5,8 @@
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- Drop existing tables if they exist (for fresh setup)
+DROP TABLE IF EXISTS public.friendships;
+DROP TABLE IF EXISTS public.friend_requests;
 DROP TABLE IF EXISTS public.event_checkins;
 DROP TABLE IF EXISTS public.events;
 DROP TABLE IF EXISTS public.profiles;
@@ -61,6 +63,28 @@ CREATE TABLE public.event_checkins (
   UNIQUE(user_id, event_id)
 );
 
+-- Friend requests table
+CREATE TABLE public.friend_requests (
+  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  requester_id uuid REFERENCES public.profiles(id) ON DELETE CASCADE NOT NULL,
+  receiver_id uuid REFERENCES public.profiles(id) ON DELETE CASCADE NOT NULL,
+  status text CHECK (status IN ('pending', 'accepted', 'declined')) DEFAULT 'pending',
+  created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL,
+  updated_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL,
+  UNIQUE(requester_id, receiver_id),
+  CHECK (requester_id != receiver_id)
+);
+
+-- Friendships table
+CREATE TABLE public.friendships (
+  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id uuid REFERENCES public.profiles(id) ON DELETE CASCADE NOT NULL,
+  friend_id uuid REFERENCES public.profiles(id) ON DELETE CASCADE NOT NULL,
+  created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL,
+  UNIQUE(user_id, friend_id),
+  CHECK (user_id != friend_id)
+);
+
 -- Create indexes for better performance
 CREATE INDEX idx_profiles_email ON public.profiles(email);
 CREATE INDEX idx_events_date_time ON public.events(date_time);
@@ -69,11 +93,18 @@ CREATE INDEX idx_events_featured ON public.events(is_featured);
 CREATE INDEX idx_event_checkins_user_id ON public.event_checkins(user_id);
 CREATE INDEX idx_event_checkins_event_id ON public.event_checkins(event_id);
 CREATE INDEX idx_event_checkins_status ON public.event_checkins(status);
+CREATE INDEX idx_friend_requests_requester ON public.friend_requests(requester_id);
+CREATE INDEX idx_friend_requests_receiver ON public.friend_requests(receiver_id);
+CREATE INDEX idx_friend_requests_status ON public.friend_requests(status);
+CREATE INDEX idx_friendships_user_id ON public.friendships(user_id);
+CREATE INDEX idx_friendships_friend_id ON public.friendships(friend_id);
 
 -- Enable Row Level Security (RLS)
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.event_checkins ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.friend_requests ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.friendships ENABLE ROW LEVEL SECURITY;
 
 -- Profiles policies
 CREATE POLICY "Users can view all profiles" ON public.profiles
@@ -119,6 +150,29 @@ CREATE POLICY "Users can update own check-ins" ON public.event_checkins
 CREATE POLICY "Users can delete own check-ins" ON public.event_checkins
   FOR DELETE USING (auth.uid() = user_id);
 
+-- Friend requests policies
+CREATE POLICY "Users can view their friend requests" ON public.friend_requests
+  FOR SELECT USING (auth.uid() = requester_id OR auth.uid() = receiver_id);
+
+CREATE POLICY "Users can send friend requests" ON public.friend_requests
+  FOR INSERT WITH CHECK (auth.uid() = requester_id);
+
+CREATE POLICY "Users can update received friend requests" ON public.friend_requests
+  FOR UPDATE USING (auth.uid() = receiver_id);
+
+CREATE POLICY "Users can delete their own friend requests" ON public.friend_requests
+  FOR DELETE USING (auth.uid() = requester_id OR auth.uid() = receiver_id);
+
+-- Friendships policies
+CREATE POLICY "Users can view their friendships" ON public.friendships
+  FOR SELECT USING (auth.uid() = user_id OR auth.uid() = friend_id);
+
+CREATE POLICY "Users can create friendships" ON public.friendships
+  FOR INSERT WITH CHECK (auth.uid() = user_id OR auth.uid() = friend_id);
+
+CREATE POLICY "Users can delete their friendships" ON public.friendships
+  FOR DELETE USING (auth.uid() = user_id OR auth.uid() = friend_id);
+
 -- Function to automatically create user profile
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS trigger AS $$
@@ -158,6 +212,10 @@ CREATE TRIGGER events_updated_at
 
 CREATE TRIGGER event_checkins_updated_at
   BEFORE UPDATE ON public.event_checkins
+  FOR EACH ROW EXECUTE PROCEDURE public.handle_updated_at();
+
+CREATE TRIGGER friend_requests_updated_at
+  BEFORE UPDATE ON public.friend_requests
   FOR EACH ROW EXECUTE PROCEDURE public.handle_updated_at();
 
 -- Insert sample data for testing

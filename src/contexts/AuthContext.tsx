@@ -34,25 +34,36 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const getSession = async () => {
+      console.log('🔍 Getting initial session...')
       const { data: { session } } = await supabase.auth.getSession()
+      console.log('📱 Initial session:', session ? 'Found' : 'None')
+      console.log('👤 Initial user:', session?.user?.email || 'None')
+      
       setSession(session)
       setUser(session?.user ?? null)
       
       if (session?.user) {
+        console.log('👤 Fetching profile for user:', session.user.id)
         await fetchProfile(session.user.id)
       }
       
       setLoading(false)
+      console.log('✅ Auth initialization complete')
     }
 
     getSession()
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
+        console.log('🔄 Auth state change:', event)
+        console.log('📱 New session:', session ? 'Found' : 'None')
+        console.log('👤 New user:', session?.user?.email || 'None')
+        
         setSession(session)
         setUser(session?.user ?? null)
         
         if (session?.user) {
+          console.log('👤 Fetching profile after auth change:', session.user.id)
           await fetchProfile(session.user.id)
         } else {
           setProfile(null)
@@ -63,6 +74,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     )
 
     return () => subscription.unsubscribe()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const fetchProfile = async (userId: string) => {
@@ -113,12 +125,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (error) {
         console.error('Error creating profile:', error)
+        console.error('Error details:', JSON.stringify(error, null, 2))
       } else {
         setProfile(data)
         console.log('Profile created successfully')
       }
     } catch (error) {
-      console.error('Error creating profile:', error)
+      console.error('Error creating profile (catch):', error)
     }
   }
 
@@ -154,7 +167,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   const signOut = async () => {
-    await supabase.auth.signOut()
+    console.log('🚪 Starting sign out process...')
+    try {
+      const { error } = await supabase.auth.signOut()
+      if (error) {
+        console.error('❌ Supabase sign out error:', error)
+        throw error
+      }
+      
+      // Clear local state immediately
+      setUser(null)
+      setProfile(null)
+      setSession(null)
+      setLoading(false)
+      
+      console.log('✅ Sign out completed successfully')
+    } catch (error) {
+      console.error('❌ Sign out failed:', error)
+      // Clear local state even if signOut fails
+      setUser(null)
+      setProfile(null)
+      setSession(null)
+      setLoading(false)
+      throw error
+    }
   }
 
   const value = {

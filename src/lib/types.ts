@@ -39,3 +39,33 @@ export interface EventCheckin {
 }
 
 export type CheckinStatus = 'going' | 'interested' | null
+
+export interface EventWithCheckinStatus extends Event {
+  checkinStatus: CheckinStatus
+  checkinCount?: {
+    going: number
+    interested: number
+  }
+  friendsGoing?: UserProfile[]
+  friendsInterested?: UserProfile[]
+}
+
+export interface FriendRequest {
+  id: string
+  requester_id: string
+  receiver_id: string
+  status: 'pending' | 'accepted' | 'declined'
+  created_at: string
+  updated_at: string
+  requester?: UserProfile
+  receiver?: UserProfile
+}
+
+export interface Friendship {
+  id: string
+  user_id: string
+  friend_id: string
+  created_at: string
+  friend?: UserProfile
+  user?: UserProfile
+}

@@ -1,25 +1,13 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { z } from 'zod'
 import { Eye, EyeOff, User, Mail, Lock, UserPlus, ArrowLeft } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
+import { signUpSchema, SignUpFormData } from '@/lib/validation'
 import Link from 'next/link'
-
-const signUpSchema = z.object({
-  fullName: z.string().min(2, 'Full name must be at least 2 characters'),
-  email: z.string().email('Please enter a valid email address'),
-  password: z.string().min(6, 'Password must be at least 6 characters'),
-  confirmPassword: z.string().min(6, 'Please confirm your password'),
-}).refine((data) => data.password === data.confirmPassword, {
-  message: "Passwords don&apos;t match",
-  path: ["confirmPassword"],
-})
-
-type SignUpFormData = z.infer<typeof signUpSchema>
 
 export default function SignUpPage() {
   const [showPassword, setShowPassword] = useState(false)
@@ -29,7 +17,7 @@ export default function SignUpPage() {
   const [confirmationEmail, setConfirmationEmail] = useState<string | null>(null)
   const [showResendButton, setShowResendButton] = useState(false)
   
-  const { signUp, resendConfirmation } = useAuth()
+  const { user, loading, signUp, resendConfirmation } = useAuth()
   const router = useRouter()
 
   const form = useForm<SignUpFormData>({
@@ -41,6 +29,28 @@ export default function SignUpPage() {
       confirmPassword: '',
     },
   })
+
+  // Redirect if already authenticated
+  useEffect(() => {
+    if (!loading && user) {
+      console.log('User already authenticated, redirecting to events')
+      router.push('/events')
+    }
+  }, [user, loading, router])
+
+  // Show loading while checking auth status
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-500 via-purple-600 to-pink-500 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-4 border-white border-t-transparent"></div>
+      </div>
+    )
+  }
+
+  // If user is authenticated, don't render the form (redirect will happen)
+  if (user) {
+    return null
+  }
 
   const handleSignUp = async (data: SignUpFormData) => {
     setIsLoading(true)
@@ -154,7 +164,7 @@ export default function SignUpPage() {
                       type="text"
                       id="fullName"
                       autoComplete="name"
-                      className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+                      className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none text-gray-900"
                       placeholder="Your full name"
                     />
                   </div>
@@ -174,7 +184,7 @@ export default function SignUpPage() {
                       type="email"
                       id="email"
                       autoComplete="email"
-                      className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+                      className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none text-gray-900"
                       placeholder="your@email.com"
                     />
                   </div>
@@ -194,7 +204,7 @@ export default function SignUpPage() {
                       type={showPassword ? 'text' : 'password'}
                       id="password"
                       autoComplete="new-password"
-                      className="w-full pl-10 pr-12 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+                      className="w-full pl-10 pr-12 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none text-gray-900"
                       placeholder="Choose a secure password"
                     />
                     <button
@@ -221,7 +231,7 @@ export default function SignUpPage() {
                       type={showConfirmPassword ? 'text' : 'password'}
                       id="confirmPassword"
                       autoComplete="new-password"
-                      className="w-full pl-10 pr-12 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+                      className="w-full pl-10 pr-12 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none text-gray-900"
                       placeholder="Confirm your password"
                     />
                     <button

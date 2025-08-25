@@ -1,29 +1,34 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { z } from 'zod'
 import { Eye, EyeOff, Mail, Lock, LogIn } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
-
-const loginSchema = z.object({
-  email: z.string().email('Please enter a valid email address'),
-  password: z.string().min(6, 'Password must be at least 6 characters'),
-})
-
-type LoginFormData = z.infer<typeof loginSchema>
+import { loginSchema, LoginFormData } from '@/lib/validation'
+import { useAsyncOperation } from '@/hooks/useAsyncOperation'
 
 export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false)
-  const [isLoading, setIsLoading] = useState(false)
   const [authError, setAuthError] = useState<string | null>(null)
   const [confirmationEmail, setConfirmationEmail] = useState<string | null>(null)
   const [showResendButton, setShowResendButton] = useState(false)
   
-  const { signIn, resendConfirmation } = useAuth()
+  const { user, loading, signIn, resendConfirmation } = useAuth()
   const router = useRouter()
+
+  const signInOperation = useAsyncOperation({
+    showSuccessToast: true,
+    showErrorToast: false,
+    successMessage: 'Welcome back! You have been signed in successfully.'
+  })
+
+  const resendOperation = useAsyncOperation({
+    showSuccessToast: true,
+    showErrorToast: true,
+    successMessage: 'Confirmation email sent! Please check your inbox.'
+  })
 
   const loginForm = useForm<LoginFormData>({
     resolver: zodResolver(loginSchema),
@@ -33,13 +38,34 @@ export default function LoginPage() {
     },
   })
 
+  // Redirect if already authenticated
+  useEffect(() => {
+    if (!loading && user) {
+      console.log('User already authenticated, redirecting to events')
+      router.push('/events')
+    }
+  }, [user, loading, router])
+
+  // Show loading while checking auth status
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-500 via-purple-600 to-pink-500 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-4 border-white border-t-transparent"></div>
+      </div>
+    )
+  }
+
+  // If user is authenticated, don't render the form (redirect will happen)
+  if (user) {
+    return null
+  }
+
   const handleLogin = async (data: LoginFormData) => {
-    setIsLoading(true)
     setAuthError(null)
     setConfirmationEmail(null)
     setShowResendButton(false)
 
-    try {
+    const result = await signInOperation.execute(async () => {
       const { error } = await signIn(data.email, data.password)
       
       if (error) {
@@ -52,33 +78,27 @@ export default function LoginPage() {
         } else {
           setAuthError(error.message)
         }
-      } else {
-        router.push('/events')
+        throw error
       }
-    } catch {
-      setAuthError('An unexpected error occurred. Please try again.')
-    } finally {
-      setIsLoading(false)
+      
+      return 'success'
+    })
+
+    if (result) {
+      router.push('/events')
     }
   }
-
 
   const handleResendConfirmation = async () => {
     if (!confirmationEmail) return
     
-    setIsLoading(true)
-    try {
+    await resendOperation.execute(async () => {
       const { error } = await resendConfirmation(confirmationEmail)
       if (error) {
-        setAuthError(error.message)
-      } else {
-        setAuthError('Confirmation email sent! Please check your inbox.')
+        throw error
       }
-    } catch {
-      setAuthError('Failed to resend confirmation email')
-    } finally {
-      setIsLoading(false)
-    }
+      return 'success'
+    })
   }
 
   return (
@@ -114,10 +134,10 @@ export default function LoginPage() {
                   <button
                     type="button"
                     onClick={handleResendConfirmation}
-                    disabled={isLoading}
+                    disabled={resendOperation.isLoading}
                     className="text-blue-600 hover:text-blue-800 text-sm underline disabled:opacity-50"
                   >
-                    Resend confirmation email
+                    {resendOperation.isLoading ? 'Sending...' : 'Resend confirmation email'}
                   </button>
                 )}
               </div>
@@ -135,7 +155,7 @@ export default function LoginPage() {
                     type="email"
                     id="email"
                     autoComplete="email"
-                    className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+                    className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none text-gray-900"
                     placeholder="your@email.com"
                   />
                 </div>
@@ -155,7 +175,7 @@ export default function LoginPage() {
                     type={showPassword ? 'text' : 'password'}
                     id="password"
                     autoComplete="current-password"
-                    className="w-full pl-10 pr-12 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+                    className="w-full pl-10 pr-12 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none text-gray-900"
                     placeholder="••••••••"
                   />
                   <button
@@ -173,10 +193,10 @@ export default function LoginPage() {
 
               <button
                 type="submit"
-                disabled={isLoading}
+                disabled={signInOperation.isLoading}
                 className="w-full bg-gradient-to-r from-blue-500 to-purple-600 text-white py-3 px-4 rounded-lg font-medium hover:from-blue-600 hover:to-purple-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
-                {isLoading ? 'Signing In...' : 'Sign In'}
+                {signInOperation.isLoading ? 'Signing In...' : 'Sign In'}
               </button>
             </form>
 
