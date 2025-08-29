@@ -110,16 +110,26 @@ const Card = forwardRef<HTMLDivElement, CardProps>(
       .filter(Boolean)
       .join(' ')
 
-    const Component = interactive ? 'button' : 'div'
+    if (interactive) {
+      return (
+        <button
+          ref={ref as React.Ref<HTMLButtonElement>}
+          className={allClasses}
+          {...(props as React.ButtonHTMLAttributes<HTMLButtonElement>)}
+        >
+          {children}
+        </button>
+      )
+    }
 
     return (
-      <Component
-        ref={ref as React.Ref<HTMLElement>}
+      <div
+        ref={ref as React.Ref<HTMLDivElement>}
         className={allClasses}
-        {...props}
+        {...(props as React.HTMLAttributes<HTMLDivElement>)}
       >
         {children}
-      </Component>
+      </div>
     )
   }
 )

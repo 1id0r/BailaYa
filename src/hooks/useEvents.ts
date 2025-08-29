@@ -16,7 +16,14 @@ export interface CheckinMutationData {
   status: 'going' | 'interested'
 }
 
-export function useEvents() {
+export function useEvents(): {
+  events: EventWithCheckinStatus[]
+  isLoading: boolean
+  error: Error | null
+  refetch: () => void
+  toggleCheckin: (data: CheckinMutationData) => void
+  isToggling: boolean
+} {
   const { user } = useAuth()
   const queryClient = useQueryClient()
 
@@ -98,7 +105,7 @@ export function useEvents() {
     },
     enabled: true,
     staleTime: 2 * 60 * 1000, // 2 minutes - events don't change that often
-    cacheTime: 15 * 60 * 1000, // 15 minutes cache
+    gcTime: 15 * 60 * 1000, // 15 minutes cache
     refetchOnWindowFocus: true,
     refetchInterval: 5 * 60 * 1000, // Auto-refetch every 5 minutes
   })
@@ -257,12 +264,12 @@ export function useUpcomingUserEvents() {
       // Transform the joined data
       return (results || []).map(result => ({
         ...result.event,
-        checkinStatus: result.status,
+        checkinStatus: result.status as CheckinStatus,
         checkinCount: { going: 0, interested: 0 }
-      }))
+      } as unknown as EventWithCheckinStatus))
     },
     enabled: !!user,
     staleTime: 3 * 60 * 1000, // 3 minutes
-    cacheTime: 10 * 60 * 1000, // 10 minutes
+    gcTime: 10 * 60 * 1000, // 10 minutes
   })
 }

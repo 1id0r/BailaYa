@@ -406,7 +406,7 @@ export default function ProfilePage() {
                   size="lg"
                   leftIcon={<Save className="w-4 h-4" />}
                   className="flex-1"
-                  loading={isUpdating}
+                  isLoading={isUpdating}
                 >
                   {isUpdating ? 'Saving...' : 'Save Changes'}
                 </Button>

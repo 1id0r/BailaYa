@@ -11,7 +11,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
     defaultOptions: {
       queries: {
         staleTime: 5 * 60 * 1000, // 5 minutes - data stays fresh longer
-        cacheTime: 10 * 60 * 1000, // 10 minutes - keep in cache longer
+        gcTime: 10 * 60 * 1000, // 10 minutes - keep in cache longer
         refetchOnWindowFocus: true, // Refetch when user returns to tab
         refetchOnReconnect: true, // Refetch when network reconnects
         retry: 3, // Retry failed requests 3 times

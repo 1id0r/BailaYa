@@ -239,7 +239,7 @@ const UserSearch = memo(() => {
       )}
 
       {searchQuery.length > 0 && searchQuery.length < 2 && (
-        <Card variant="outline" className="text-center py-8 animate-fade-in">
+        <Card variant="outlined" className="text-center py-8 animate-fade-in">
           <CardContent>
             <Search className="w-8 h-8 text-foreground-tertiary mx-auto mb-3" />
             <p className="text-foreground-tertiary text-sm">Type at least 2 characters to search</p>

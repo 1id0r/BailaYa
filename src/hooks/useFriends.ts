@@ -3,7 +3,15 @@ import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { Friendship, FriendRequest, UserProfile, EventWithCheckinStatus } from '@/lib/types'
 
-export const useFriends = () => {
+export const useFriends = (): {
+  friends: (Friendship & { friend: UserProfile })[]
+  friendRequests: (FriendRequest & { requester: UserProfile })[]
+  isLoading: boolean
+  error: Error | null
+  removeFriend: (friendshipId: string) => void
+  isRemoving: boolean
+  refetch: () => void
+} => {
   const { user } = useAuth()
   const queryClient = useQueryClient()
 
@@ -26,7 +34,7 @@ export const useFriends = () => {
     },
     enabled: !!user,
     staleTime: 5 * 60 * 1000, // 5 minutes - friends don't change often
-    cacheTime: 15 * 60 * 1000, // 15 minutes cache
+    gcTime: 15 * 60 * 1000, // 15 minutes cache
   })
 
   const friendRequestsQuery = useQuery({
@@ -49,7 +57,7 @@ export const useFriends = () => {
     },
     enabled: !!user,
     staleTime: 1 * 60 * 1000, // 1 minute - friend requests need to be fresh
-    cacheTime: 5 * 60 * 1000, // 5 minutes cache
+    gcTime: 5 * 60 * 1000, // 5 minutes cache
     refetchInterval: 30 * 1000, // Check for new friend requests every 30 seconds
   })
 
@@ -92,7 +100,17 @@ export const useFriendsEvents = () => {
     queryFn: async (): Promise<EventWithCheckinStatus[]> => {
       if (!user) return []
 
-      // Use a more efficient single query with joins
+      // First get friend IDs
+      const { data: friendships } = await supabase
+        .from('friendships')
+        .select('friend_id')
+        .eq('user_id', user.id)
+        
+      if (!friendships || friendships.length === 0) return []
+      
+      const friendIds = friendships.map(f => f.friend_id)
+
+      // Then get their event checkins
       const { data: friendCheckins, error } = await supabase
         .from('event_checkins')
         .select(`
@@ -116,12 +134,7 @@ export const useFriendsEvents = () => {
           ),
           user:profiles!inner(*)
         `)
-        .in('user_id', 
-          supabase
-            .from('friendships')
-            .select('friend_id')
-            .eq('user_id', user.id)
-        )
+        .in('user_id', friendIds)
         .gte('event.date_time', new Date().toISOString())
         .eq('event.is_active', true)
 
@@ -133,10 +146,10 @@ export const useFriendsEvents = () => {
       friendCheckins?.forEach(checkin => {
         if (!checkin.event) return
         
-        const eventId = checkin.event.id
+        const eventId = (checkin.event as any).id
         if (!eventsMap.has(eventId)) {
           eventsMap.set(eventId, {
-            ...checkin.event,
+            ...(checkin.event as any),
             checkinStatus: null, // User hasn't checked in
             checkinCount: { going: 0, interested: 0 },
             friendsGoing: [],
@@ -148,9 +161,9 @@ export const useFriendsEvents = () => {
         if (!event) return
         
         if (checkin.status === 'going') {
-          event.friendsGoing?.push(checkin.user)
+          event.friendsGoing?.push(checkin.user as any)
         } else {
-          event.friendsInterested?.push(checkin.user)
+          event.friendsInterested?.push(checkin.user as any)
         }
       })
 
@@ -160,6 +173,6 @@ export const useFriendsEvents = () => {
     },
     enabled: !!user,
     staleTime: 3 * 60 * 1000, // 3 minutes
-    cacheTime: 10 * 60 * 1000, // 10 minutes
+    gcTime: 10 * 60 * 1000, // 10 minutes
   })
 }
