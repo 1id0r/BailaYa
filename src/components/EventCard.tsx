@@ -1,13 +1,15 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, memo } from 'react'
 import { useRouter } from 'next/navigation'
 import { format } from 'date-fns'
-import { Calendar, Clock, MapPin, Heart, Check, Users, Share2, DollarSign } from 'lucide-react'
+import { Calendar, Clock, MapPin, Heart, Check, Users, Share2, DollarSign, Sparkles, ChevronRight } from 'lucide-react'
 import { Event, CheckinStatus } from '@/lib/types'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { useToast } from '@/contexts/ToastContext'
+import Card, { CardContent, CardFooter } from '@/components/ui/Card'
+import Button from '@/components/ui/Button'
 
 interface EventCardProps {
   event: Event & {
@@ -20,19 +22,20 @@ interface EventCardProps {
   onStatusChange?: (eventId: string, status: CheckinStatus) => void
 }
 
+// Modern dance style colors with gradients
 const DANCE_STYLE_COLORS: Record<string, string> = {
-  'salsa': 'bg-red-100 text-red-800',
-  'bachata': 'bg-pink-100 text-pink-800', 
-  'merengue': 'bg-yellow-100 text-yellow-800',
-  'reggaeton': 'bg-green-100 text-green-800',
-  'kizomba': 'bg-purple-100 text-purple-800',
-  'zouk': 'bg-blue-100 text-blue-800',
-  'chacha': 'bg-indigo-100 text-indigo-800',
-  'cha-cha': 'bg-indigo-100 text-indigo-800',
-  'cumbia': 'bg-orange-100 text-orange-800',
+  'salsa': 'bg-gradient-to-r from-red-500/20 to-pink-500/20 text-red-700 dark:text-red-300 border-red-200 dark:border-red-800',
+  'bachata': 'bg-gradient-to-r from-pink-500/20 to-rose-500/20 text-pink-700 dark:text-pink-300 border-pink-200 dark:border-pink-800',
+  'merengue': 'bg-gradient-to-r from-yellow-500/20 to-orange-500/20 text-yellow-700 dark:text-yellow-300 border-yellow-200 dark:border-yellow-800',
+  'reggaeton': 'bg-gradient-to-r from-green-500/20 to-emerald-500/20 text-green-700 dark:text-green-300 border-green-200 dark:border-green-800',
+  'kizomba': 'bg-gradient-to-r from-purple-500/20 to-violet-500/20 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800',
+  'zouk': 'bg-gradient-to-r from-blue-500/20 to-cyan-500/20 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800',
+  'chacha': 'bg-gradient-to-r from-indigo-500/20 to-blue-500/20 text-indigo-700 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800',
+  'cha-cha': 'bg-gradient-to-r from-indigo-500/20 to-blue-500/20 text-indigo-700 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800',
+  'cumbia': 'bg-gradient-to-r from-orange-500/20 to-red-500/20 text-orange-700 dark:text-orange-300 border-orange-200 dark:border-orange-800',
 }
 
-export default function EventCard({ event, checkinStatus, onStatusChange }: EventCardProps) {
+const EventCard = memo(({ event, checkinStatus, onStatusChange }: EventCardProps) => {
   const { user } = useAuth()
   const router = useRouter()
   const { showToast } = useToast()
@@ -47,277 +50,229 @@ export default function EventCard({ event, checkinStatus, onStatusChange }: Even
           text: `Check out this ${event.dance_styles?.join(', ')} event at ${event.venue_name}!`,
           url: `${window.location.origin}/events/${event.id}`,
         })
-      } catch (error) {
-        console.log('Error sharing:', error)
+      } catch {
+        // Silent fail for share cancellation
       }
     } else {
-      // Fallback: copy to clipboard
+      // Fallback to clipboard
       try {
         await navigator.clipboard.writeText(`${window.location.origin}/events/${event.id}`)
-        showToast({
-          type: 'success',
-          title: 'Link copied!',
-          message: 'Event link copied to clipboard'
-        })
-      } catch (error) {
-        console.log('Error copying to clipboard:', error)
-        showToast({
-          type: 'error',
-          title: 'Copy failed',
-          message: 'Unable to copy link to clipboard'
-        })
+        showToast({ type: 'success', title: 'Event link copied to clipboard!' })
+      } catch {
+        showToast({ type: 'error', title: 'Unable to share event' })
       }
     }
   }
 
-  const handleStatusChange = async (newStatus: 'going' | 'interested', e?: React.MouseEvent) => {
-    e?.stopPropagation() // Prevent navigation when clicking buttons
-    if (!user || isUpdating) return
+  const handleStatusChange = async (newStatus: CheckinStatus) => {
+    if (!user) {
+        showToast({ type: 'info', title: 'Please sign in to check in to events' })
+      router.push('/auth/login')
+      return
+    }
+
+    if (isUpdating) return
 
     setIsUpdating(true)
-    
     try {
-      if (currentStatus === newStatus) {
-        const { error } = await supabase
-          .from('event_checkins')
-          .delete()
-          .eq('user_id', user.id)
-          .eq('event_id', event.id)
+      const { error } = await supabase
+        .from('event_checkins')
+        .upsert({
+          user_id: user.id,
+          event_id: event.id,
+          status: newStatus,
+        })
 
-        if (!error) {
-          setCurrentStatus(null)
-          onStatusChange?.(event.id, null)
-        }
-      } else {
-        const { error } = await supabase
-          .from('event_checkins')
-          .upsert({
-            user_id: user.id,
-            event_id: event.id,
-            status: newStatus,
-          })
+      if (error) throw error
 
-        if (!error) {
-          setCurrentStatus(newStatus)
-          onStatusChange?.(event.id, newStatus)
-        }
-      }
-    } catch (error) {
-      console.error('Error updating check-in status:', error)
+      setCurrentStatus(newStatus)
+      onStatusChange?.(event.id, newStatus)
+      
+      const statusText = newStatus === 'going' ? 'attending' : newStatus === 'interested' ? 'interested in' : 'removed from'
+      showToast({ type: 'success', title: `You're now ${statusText} this event!` })
+    } catch {
+      showToast({ type: 'error', title: 'Failed to update status. Please try again.' })
     } finally {
       setIsUpdating(false)
     }
   }
 
-  const handleCardClick = () => {
-    router.push(`/events/${event.id}`)
-  }
-
-  const eventDateTime = new Date(event.date_time)
-  const formattedDate = format(eventDateTime, 'MMM dd, yyyy')
-  const formattedTime = format(eventDateTime, 'h:mm a')
+  const eventDate = new Date(event.date_time)
+  const isUpcoming = eventDate > new Date()
+  const totalAttendees = (event.checkinCount?.going || 0) + (event.checkinCount?.interested || 0)
 
   return (
-    <div 
-      onClick={handleCardClick}
-      className="bg-white dark:bg-gray-800 rounded-xl shadow-md hover:shadow-lg transition-shadow overflow-hidden mb-4 mx-4 sm:mx-0 cursor-pointer"
+    <Card 
+      variant="elevated" 
+      padding="none" 
+      hover
+      className="group overflow-hidden animate-fade-in"
     >
-      {event.image_url && (
-        <div className="relative h-48 sm:h-56">
+      {/* Hero Image Section */}
+      <div className="relative h-48 overflow-hidden">
+        {event.image_url ? (
           <img
             src={event.image_url}
             alt={event.title}
-            className="w-full h-full object-cover"
+            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+            loading="lazy"
           />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
-          
-          {/* Share button overlay */}
-          <button
-            onClick={(e) => {
-              e.stopPropagation()
-              handleShare()
-            }}
-            className="absolute top-3 right-3 bg-white/90 hover:bg-white p-2 rounded-full shadow-sm transition-colors"
-          >
-            <Share2 className="w-4 h-4 text-gray-700 dark:text-gray-300" />
-          </button>
+        ) : (
+          <div className="w-full h-full bg-gradient-to-br from-primary-500 via-secondary-500 to-primary-600 flex items-center justify-center">
+            <Sparkles className="w-16 h-16 text-white/80" />
+          </div>
+        )}
+        
+        {/* Gradient overlay */}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
+        
+        {/* Status indicators */}
+        <div className="absolute top-4 left-4 flex gap-2">
+          {!isUpcoming && (
+            <div className="px-2 py-1 bg-foreground-muted/80 backdrop-blur-sm text-white text-xs rounded-full font-medium">
+              Past Event
+            </div>
+          )}
+          {event.entry_price && (
+            <div className="px-2 py-1 bg-success-500/80 backdrop-blur-sm text-white text-xs rounded-full font-medium flex items-center gap-1">
+              <DollarSign className="w-3 h-3" />
+              ${event.entry_price}
+            </div>
+          )}
+        </div>
 
-          {/* Dance style badges overlay */}
-          {event.dance_styles && event.dance_styles.length > 0 && (
-            <div className="absolute bottom-3 left-3 flex flex-wrap gap-1">
-              {event.dance_styles.slice(0, 3).map((style, index) => (
+        {/* Share button */}
+        <button
+          onClick={handleShare}
+          className="absolute top-4 right-4 w-8 h-8 bg-white/20 backdrop-blur-sm text-white rounded-full flex items-center justify-center transition-all hover:bg-white/30 hover:scale-110 active:scale-95"
+          aria-label="Share event"
+        >
+          <Share2 className="w-4 h-4" />
+        </button>
+
+        {/* Title overlay */}
+        <div className="absolute bottom-4 left-4 right-4">
+          <h3 className="text-white font-bold text-lg leading-tight mb-1 line-clamp-2">
+            {event.title}
+          </h3>
+          <p className="text-white/80 text-sm font-medium">
+            {event.venue_name}
+          </p>
+        </div>
+      </div>
+
+      <CardContent className="p-6">
+        {/* Event Details */}
+        <div className="space-y-3 mb-4">
+          <div className="flex items-center gap-3 text-foreground-secondary">
+            <Calendar className="w-4 h-4 text-primary-500" />
+            <span className="text-sm font-medium">
+              {format(eventDate, 'EEEE, MMMM d, yyyy')}
+            </span>
+          </div>
+          
+          <div className="flex items-center gap-3 text-foreground-secondary">
+            <Clock className="w-4 h-4 text-primary-500" />
+            <span className="text-sm font-medium">
+              {format(eventDate, 'h:mm a')}
+            </span>
+          </div>
+
+          <div className="flex items-start gap-3 text-foreground-secondary">
+            <MapPin className="w-4 h-4 text-primary-500 mt-0.5 flex-shrink-0" />
+            <span className="text-sm font-medium leading-relaxed">
+              {event.venue_address}
+            </span>
+          </div>
+        </div>
+
+        {/* Dance Styles */}
+        {event.dance_styles && event.dance_styles.length > 0 && (
+          <div className="mb-4">
+            <div className="flex flex-wrap gap-2">
+              {event.dance_styles.slice(0, 3).map((style) => (
                 <span
-                  key={index}
-                  className={`px-2 py-1 text-xs font-medium rounded-full ${
-                    DANCE_STYLE_COLORS[style.toLowerCase()] || 'bg-gray-100 text-gray-800'
-                  } bg-opacity-90 backdrop-blur-sm`}
+                  key={style}
+                  className={`px-3 py-1 text-xs font-medium rounded-full border transition-all hover:scale-105 ${
+                    DANCE_STYLE_COLORS[style.toLowerCase()] || 
+                    'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-700'
+                  }`}
                 >
                   {style}
                 </span>
               ))}
               {event.dance_styles.length > 3 && (
-                <span className="px-2 py-1 text-xs font-medium rounded-full bg-gray-100 text-gray-800 bg-opacity-90 backdrop-blur-sm">
-                  +{event.dance_styles.length - 3}
+                <span className="px-3 py-1 text-xs font-medium rounded-full bg-background-tertiary text-foreground-secondary border border-border">
+                  +{event.dance_styles.length - 3} more
                 </span>
               )}
             </div>
-          )}
-        </div>
-      )}
-      
-      <div className="p-4 sm:p-6">
-        {/* Header with title and attendance */}
-        <div className="flex justify-between items-start mb-3">
-          <h3 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100 flex-1 line-clamp-2 pr-2">
-            {event.title}
-          </h3>
-          
-          {/* Attendance count */}
-          {event.checkinCount && (
-            <div className="flex items-center gap-1 text-gray-600 dark:text-gray-400 min-w-fit">
-              <Users className="w-4 h-4" />
-              <span className="text-sm font-medium">
-                {(event.checkinCount.going || 0) + (event.checkinCount.interested || 0)}
-              </span>
-            </div>
-          )}
-        </div>
-        
-        {/* Dance styles - show if no image */}
-        {!event.image_url && event.dance_styles && event.dance_styles.length > 0 && (
-          <div className="flex flex-wrap gap-1 mb-4">
-            {event.dance_styles.slice(0, 4).map((style, index) => (
-              <span
-                key={index}
-                className={`px-2 py-1 text-xs font-medium rounded-full ${
-                  DANCE_STYLE_COLORS[style.toLowerCase()] || 'bg-gray-100 text-gray-800'
-                }`}
-              >
-                {style}
-              </span>
-            ))}
-            {event.dance_styles.length > 4 && (
-              <span className="px-2 py-1 text-xs font-medium rounded-full bg-gray-100 text-gray-800">
-                +{event.dance_styles.length - 4}
-              </span>
-            )}
           </div>
         )}
-        
+
+        {/* Description */}
         {event.description && (
-          <p className="text-gray-600 dark:text-gray-300 mb-4 line-clamp-3 text-sm sm:text-base">
+          <p className="text-foreground-secondary text-sm leading-relaxed line-clamp-2 mb-4">
             {event.description}
           </p>
         )}
-        
-        <div className="space-y-2 mb-4">
-          <div className="flex items-center text-gray-700">
-            <Calendar className="w-4 h-4 mr-2 text-blue-600 flex-shrink-0" />
-            <span className="text-sm sm:text-base">{formattedDate}</span>
-          </div>
-          
-          <div className="flex items-center text-gray-700">
-            <Clock className="w-4 h-4 mr-2 text-blue-600 flex-shrink-0" />
-            <span className="text-sm sm:text-base">{formattedTime}</span>
-          </div>
-          
-          <div className="flex items-center text-gray-700">
-            <MapPin className="w-4 h-4 mr-2 text-blue-600 flex-shrink-0" />
-            <div className="flex flex-col min-w-0">
-              <span className="text-sm sm:text-base font-medium truncate">{event.venue_name}</span>
-              <span className="text-xs sm:text-sm text-gray-500 truncate">{event.venue_address}</span>
-            </div>
-          </div>
 
-          {event.entry_price !== null && (
-            <div className="flex items-center text-gray-700">
-              <DollarSign className="w-4 h-4 mr-2 text-green-600 flex-shrink-0" />
-              <span className="text-sm sm:text-base font-medium">
-                {event.entry_price === 0 ? 'Free' : `$${event.entry_price}`}
-              </span>
-            </div>
+        {/* Attendee count */}
+        {totalAttendees > 0 && (
+          <div className="flex items-center gap-2 text-foreground-tertiary mb-4">
+            <Users className="w-4 h-4" />
+            <span className="text-sm">
+              {totalAttendees} {totalAttendees === 1 ? 'person' : 'people'} interested
+            </span>
+          </div>
+        )}
+      </CardContent>
+
+      <CardFooter align="between" className="px-6 pb-6">
+        {/* Action buttons */}
+        <div className="flex gap-2">
+          {isUpcoming && (
+            <>
+              <Button
+                variant={currentStatus === 'going' ? 'success' : 'outline'}
+                size="sm"
+                onClick={() => handleStatusChange(currentStatus === 'going' ? null : 'going')}
+                isLoading={isUpdating}
+                leftIcon={<Check className="w-4 h-4" />}
+                className="flex-1"
+              >
+                {currentStatus === 'going' ? 'Going' : 'Going?'}
+              </Button>
+              
+              <Button
+                variant={currentStatus === 'interested' ? 'secondary' : 'ghost'}
+                size="sm"
+                onClick={() => handleStatusChange(currentStatus === 'interested' ? null : 'interested')}
+                isLoading={isUpdating}
+                leftIcon={<Heart className="w-4 h-4" />}
+                className="flex-1"
+              >
+                {currentStatus === 'interested' ? 'Interested' : 'Interested?'}
+              </Button>
+            </>
           )}
         </div>
 
-        {/* Detailed attendance breakdown */}
-        {event.checkinCount && (event.checkinCount.going > 0 || event.checkinCount.interested > 0) && (
-          <div className="flex items-center gap-4 mb-4 text-sm">
-            {event.checkinCount.going > 0 && (
-              <div className="flex items-center gap-1 text-green-700">
-                <Check className="w-3 h-3" />
-                <span>{event.checkinCount.going} going</span>
-              </div>
-            )}
-            {event.checkinCount.interested > 0 && (
-              <div className="flex items-center gap-1 text-pink-700">
-                <Heart className="w-3 h-3" />
-                <span>{event.checkinCount.interested} interested</span>
-              </div>
-            )}
-          </div>
-        )}
-        
-        {user && (
-          <div className="flex gap-2 sm:gap-3">
-            <button
-              onClick={(e) => handleStatusChange('going', e)}
-              disabled={isUpdating}
-              className={`flex-1 flex items-center justify-center gap-1 sm:gap-2 py-2.5 sm:py-3 px-3 sm:px-4 rounded-lg font-medium transition-all ${
-                currentStatus === 'going'
-                  ? 'bg-green-600 text-white shadow-sm'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              } ${isUpdating ? 'opacity-50 cursor-not-allowed' : ''}`}
-            >
-              <Check className="w-4 h-4 flex-shrink-0" />
-              <span className="text-sm sm:text-base truncate">Going</span>
-            </button>
-            
-            <button
-              onClick={(e) => handleStatusChange('interested', e)}
-              disabled={isUpdating}
-              className={`flex-1 flex items-center justify-center gap-1 sm:gap-2 py-2.5 sm:py-3 px-3 sm:px-4 rounded-lg font-medium transition-all ${
-                currentStatus === 'interested'
-                  ? 'bg-pink-600 text-white shadow-sm'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              } ${isUpdating ? 'opacity-50 cursor-not-allowed' : ''}`}
-            >
-              <Heart className="w-4 h-4 flex-shrink-0" />
-              <span className="text-sm sm:text-base truncate">Interested</span>
-            </button>
-
-            {/* Share button for mobile when no image */}
-            {!event.image_url && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation()
-                  handleShare()
-                }}
-                className="flex items-center justify-center p-2.5 sm:p-3 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
-              >
-                <Share2 className="w-4 h-4" />
-              </button>
-            )}
-          </div>
-        )}
-        
-        {!user && (
-          <div className="text-center py-3">
-            <p className="text-gray-500 text-sm">Sign in to check-in to events</p>
-            {!event.image_url && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation()
-                  handleShare()
-                }}
-                className="mt-2 inline-flex items-center gap-1 text-blue-600 text-sm hover:text-blue-800"
-              >
-                <Share2 className="w-4 h-4" />
-                Share Event
-              </button>
-            )}
-          </div>
-        )}
-      </div>
-    </div>
+        {/* View details button */}
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => router.push(`/events/${event.id}`)}
+          rightIcon={<ChevronRight className="w-4 h-4" />}
+          className="ml-2"
+        >
+          Details
+        </Button>
+      </CardFooter>
+    </Card>
   )
-}
+})
+
+EventCard.displayName = 'EventCard'
+
+export default EventCard

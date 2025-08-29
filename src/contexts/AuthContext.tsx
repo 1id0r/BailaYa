@@ -167,11 +167,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   const signOut = async () => {
-    console.log('🚪 Starting sign out process...')
     try {
       const { error } = await supabase.auth.signOut()
       if (error) {
-        console.error('❌ Supabase sign out error:', error)
         throw error
       }
       
@@ -180,10 +178,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setProfile(null)
       setSession(null)
       setLoading(false)
-      
-      console.log('✅ Sign out completed successfully')
     } catch (error) {
-      console.error('❌ Sign out failed:', error)
       // Clear local state even if signOut fails
       setUser(null)
       setProfile(null)

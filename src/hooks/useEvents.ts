@@ -23,56 +23,70 @@ export function useEvents() {
   const eventsQuery = useQuery({
     queryKey: ['events', user?.id],
     queryFn: async (): Promise<EventWithCheckinStatus[]> => {
-      console.log('Fetching events...')
-      
-      // Fetch events
-      const { data: events, error: eventsError } = await supabase
-        .from('events')
-        .select('*')
-        .eq('is_active', true)
-        .order('date_time', { ascending: true })
-
-      console.log('Events query result:', { events, error: eventsError })
-
-      if (eventsError) {
-        console.error('Events error:', eventsError)
-        throw eventsError
-      }
-
-      // Fetch user's check-ins if authenticated
-      let userCheckins: EventCheckin[] = []
-      if (user) {
-        const { data, error } = await supabase
+      // Use Promise.all to fetch all data in parallel for better performance
+      const promises: [Promise<any>, Promise<any>, Promise<any>] = [
+        // Fetch events
+        supabase
+          .from('events')
+          .select('*')
+          .eq('is_active', true)
+          .order('date_time', { ascending: true }),
+        
+        // Fetch user's check-ins if authenticated (parallel)
+        user ? supabase
           .from('event_checkins')
           .select('*')
           .eq('user_id', user.id)
+        : Promise.resolve({ data: [], error: null }),
+        
+        // Fetch checkin counts for all events (parallel)
+        supabase
+          .from('event_checkins')
+          .select('event_id, status')
+      ]
 
-        if (error) throw error
-        userCheckins = data || []
+      const [eventsResult, userCheckinsResult, checkinCountsResult] = await Promise.all(promises)
+      
+      if (eventsResult.error) {
+        console.error('Events error:', eventsResult.error)
+        throw eventsResult.error
+      }
+      
+      if (userCheckinsResult.error) {
+        console.error('User checkins error:', userCheckinsResult.error)
+        throw userCheckinsResult.error
+      }
+      
+      if (checkinCountsResult.error) {
+        console.error('Checkin counts error:', checkinCountsResult.error)
+        throw checkinCountsResult.error
       }
 
-      // Fetch checkin counts for all events
-      const { data: checkinCounts, error: countsError } = await supabase
-        .from('event_checkins')
-        .select('event_id, status')
+      const events = eventsResult.data || []
+      const userCheckins = userCheckinsResult.data || []
+      const checkinCounts = checkinCountsResult.data || []
 
-      if (countsError) throw countsError
-
-      // Create checkin status map
+      // Create checkin status map with better performance
       const userCheckinMap = new Map<string, CheckinStatus>()
       userCheckins.forEach(checkin => {
         userCheckinMap.set(checkin.event_id, checkin.status)
       })
 
-      // Create checkin counts map
+      // Create checkin counts map with improved logic
       const checkinCountsMap = new Map<string, { going: number; interested: number }>()
-      checkinCounts?.forEach(checkin => {
-        if (!checkinCountsMap.has(checkin.event_id)) {
-          checkinCountsMap.set(checkin.event_id, { going: 0, interested: 0 })
+      
+      // Initialize all events with zero counts first
+      events.forEach(event => {
+        checkinCountsMap.set(event.id, { going: 0, interested: 0 })
+      })
+      
+      // Then populate with actual counts
+      checkinCounts.forEach(checkin => {
+        const counts = checkinCountsMap.get(checkin.event_id)
+        if (counts) {
+          if (checkin.status === 'going') counts.going++
+          else if (checkin.status === 'interested') counts.interested++
         }
-        const counts = checkinCountsMap.get(checkin.event_id)!
-        if (checkin.status === 'going') counts.going++
-        else if (checkin.status === 'interested') counts.interested++
       })
 
       // Combine data
@@ -83,6 +97,10 @@ export function useEvents() {
       }))
     },
     enabled: true,
+    staleTime: 2 * 60 * 1000, // 2 minutes - events don't change that often
+    cacheTime: 15 * 60 * 1000, // 15 minutes cache
+    refetchOnWindowFocus: true,
+    refetchInterval: 5 * 60 * 1000, // Auto-refetch every 5 minutes
   })
 
   const toggleCheckinMutation = useMutation({
@@ -207,37 +225,44 @@ export function useUpcomingUserEvents() {
     queryFn: async (): Promise<EventWithCheckinStatus[]> => {
       if (!user) return []
 
-      // First get the user's check-ins
-      const { data: checkins, error: checkinsError } = await supabase
+      // Use a single join query for better performance
+      const { data: results, error } = await supabase
         .from('event_checkins')
-        .select('*')
+        .select(`
+          status,
+          event:events!inner(
+            id,
+            title,
+            description,
+            date_time,
+            venue_name,
+            venue_address,
+            dance_styles,
+            entry_price,
+            organizer_name,
+            organizer_contact,
+            image_url,
+            is_active,
+            created_at,
+            updated_at
+          )
+        `)
         .eq('user_id', user.id)
+        .gte('event.date_time', new Date().toISOString())
+        .eq('event.is_active', true)
+        .order('event.date_time', { ascending: true })
 
-      if (checkinsError) throw checkinsError
+      if (error) throw error
 
-      if (!checkins || checkins.length === 0) return []
-
-      // Then get the events for those check-ins
-      const eventIds = checkins.map(c => c.event_id)
-      const { data: events, error: eventsError } = await supabase
-        .from('events')
-        .select('*')
-        .in('id', eventIds)
-        .gte('date_time', new Date().toISOString())
-        .order('date_time', { ascending: true })
-
-      if (eventsError) throw eventsError
-
-      // Combine the data
-      return (events || []).map(event => {
-        const checkin = checkins.find(c => c.event_id === event.id)
-        return {
-          ...event,
-          checkinStatus: checkin?.status || null,
-          checkinCount: { going: 0, interested: 0 }
-        }
-      })
+      // Transform the joined data
+      return (results || []).map(result => ({
+        ...result.event,
+        checkinStatus: result.status,
+        checkinCount: { going: 0, interested: 0 }
+      }))
     },
     enabled: !!user,
+    staleTime: 3 * 60 * 1000, // 3 minutes
+    cacheTime: 10 * 60 * 1000, // 10 minutes
   })
 }

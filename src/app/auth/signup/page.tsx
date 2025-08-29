@@ -33,7 +33,6 @@ export default function SignUpPage() {
   // Redirect if already authenticated
   useEffect(() => {
     if (!loading && user) {
-      console.log('User already authenticated, redirecting to events')
       router.push('/events')
     }
   }, [user, loading, router])

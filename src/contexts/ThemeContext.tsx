@@ -50,9 +50,6 @@ export const ThemeProvider = ({ children }: ThemeProviderProps) => {
     const root = document.documentElement
     const body = document.body
     
-    console.log('🎨 Applying theme:', theme)
-    console.log('📋 Root classes before:', root.className)
-    
     // Remove any existing theme classes first
     root.classList.remove('light', 'dark')
     body.classList.remove('light', 'dark')
@@ -77,14 +74,6 @@ export const ThemeProvider = ({ children }: ThemeProviderProps) => {
     
     localStorage.setItem('theme', theme)
     
-    console.log('✅ Theme applied:', theme)
-    console.log('📋 Root classes after:', root.className)
-    console.log('🎯 Body classes:', body.className)
-    console.log('🎨 CSS variables:', {
-      background: getComputedStyle(root).getPropertyValue('--background'),
-      foreground: getComputedStyle(root).getPropertyValue('--foreground')
-    })
-    
     // Force style recalculation
     requestAnimationFrame(() => {
       body.style.transition = 'none'
@@ -94,9 +83,7 @@ export const ThemeProvider = ({ children }: ThemeProviderProps) => {
   }, [theme, mounted])
 
   const toggleTheme = () => {
-    console.log('toggleTheme called, current:', theme)
     const newTheme = theme === 'light' ? 'dark' : 'light'
-    console.log('Switching to:', newTheme)
     setTheme(newTheme)
   }
 

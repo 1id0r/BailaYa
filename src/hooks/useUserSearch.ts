@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react'
+import { useState, useCallback, useRef, useMemo } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { UserProfile } from '@/lib/types'
@@ -12,29 +12,58 @@ export const useUserSearch = () => {
   const { user } = useAuth()
   const [searchResults, setSearchResults] = useState<UserWithFriendStatus[]>([])
   const [isSearching, setIsSearching] = useState(false)
+  const [currentQuery, setCurrentQuery] = useState('')
+  const [isPerformingAction, setIsPerformingAction] = useState(false)
   const userRef = useRef(user)
+  const abortControllerRef = useRef<AbortController | null>(null)
+  const cacheRef = useRef<Map<string, UserWithFriendStatus[]>>(new Map())
 
   // Update ref when user changes
   userRef.current = user
 
   const searchUsers = useCallback(async (query: string) => {
     const currentUser = userRef.current
+    const trimmedQuery = query.trim().toLowerCase()
     
-    if (!currentUser || query.trim().length < 2) {
+    if (!currentUser || trimmedQuery.length < 2) {
       setSearchResults([])
+      setCurrentQuery('')
       return
     }
 
+    // Prevent duplicate searches for the same query
+    if (currentQuery === trimmedQuery) {
+      return
+    }
+
+    // Check cache first
+    if (cacheRef.current.has(trimmedQuery)) {
+      const cachedResults = cacheRef.current.get(trimmedQuery)!
+      setSearchResults(cachedResults)
+      setCurrentQuery(trimmedQuery)
+      return
+    }
+
+    // Cancel any ongoing request
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort()
+    }
+
+    // Create new abort controller
+    abortControllerRef.current = new AbortController()
+    
     setIsSearching(true)
+    setCurrentQuery(trimmedQuery)
 
     try {
-      // Search for users by name or email
+      // Search for users by name or email (select only needed fields)
       const { data: users, error } = await supabase
         .from('profiles')
-        .select('*')
+        .select('id, email, full_name, location, dance_preferences, avatar_url')
         .neq('id', currentUser.id) // Exclude current user
-        .or(`full_name.ilike.%${query}%,email.ilike.%${query}%`)
-        .limit(20)
+        .or(`full_name.ilike.%${trimmedQuery}%,email.ilike.%${trimmedQuery}%`)
+        .limit(15) // Reduced limit for better performance
+        .abortSignal(abortControllerRef.current.signal)
 
       if (error) throw error
 
@@ -102,18 +131,32 @@ export const useUserSearch = () => {
       })
 
       setSearchResults(usersWithStatus)
-    } catch (error) {
-      console.error('Error searching users:', error)
-      setSearchResults([])
+      
+      // Cache the results
+      cacheRef.current.set(trimmedQuery, usersWithStatus)
+      
+      // Limit cache size to prevent memory leaks
+      if (cacheRef.current.size > 10) {
+        const firstKey = cacheRef.current.keys().next().value
+        cacheRef.current.delete(firstKey)
+      }
+    } catch (error: unknown) {
+      // Don't log abort errors
+      if (error && typeof error === 'object' && 'name' in error && error.name !== 'AbortError') {
+        console.error('Error searching users:', error)
+        setSearchResults([])
+      }
     } finally {
       setIsSearching(false)
+      abortControllerRef.current = null
     }
   }, [])
 
-  const sendFriendRequest = async (receiverId: string) => {
+  const sendFriendRequest = useCallback(async (receiverId: string) => {
     const currentUser = userRef.current
-    if (!currentUser) return
+    if (!currentUser || isPerformingAction) return
 
+    setIsPerformingAction(true)
     try {
       const { error } = await supabase
         .from('friend_requests')
@@ -134,13 +177,16 @@ export const useUserSearch = () => {
       )
     } catch (error) {
       console.error('Error sending friend request:', error)
+    } finally {
+      setIsPerformingAction(false)
     }
-  }
+  }, [isPerformingAction])
 
-  const acceptFriendRequest = async (requestId: string, requesterId: string) => {
+  const acceptFriendRequest = useCallback(async (requestId: string, requesterId: string) => {
     const currentUser = userRef.current
-    if (!currentUser) return
+    if (!currentUser || isPerformingAction) return
 
+    setIsPerformingAction(true)
     try {
       // Start a transaction-like operation
       const { error: updateError } = await supabase
@@ -170,12 +216,15 @@ export const useUserSearch = () => {
       )
     } catch (error) {
       console.error('Error accepting friend request:', error)
+    } finally {
+      setIsPerformingAction(false)
     }
-  }
+  }, [isPerformingAction])
 
-  const declineFriendRequest = async (requestId: string, requesterId: string) => {
-    if (!userRef.current) return
+  const declineFriendRequest = useCallback(async (requestId: string, requesterId: string) => {
+    if (!userRef.current || isPerformingAction) return
 
+    setIsPerformingAction(true)
     try {
       const { error } = await supabase
         .from('friend_requests')
@@ -194,8 +243,17 @@ export const useUserSearch = () => {
       )
     } catch (error) {
       console.error('Error declining friend request:', error)
+    } finally {
+      setIsPerformingAction(false)
     }
-  }
+  }, [isPerformingAction])
+
+  // Clear cache when user changes
+  useMemo(() => {
+    if (user?.id) {
+      cacheRef.current.clear()
+    }
+  }, [user])
 
   return {
     searchResults,
@@ -204,6 +262,6 @@ export const useUserSearch = () => {
     sendFriendRequest,
     acceptFriendRequest,
     declineFriendRequest,
-    isPerformingAction: false,
+    isPerformingAction,
   }
 }
