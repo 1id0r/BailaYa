@@ -150,7 +150,7 @@ export const useUserSearch = () => {
       setIsSearching(false)
       abortControllerRef.current = null
     }
-  }, [])
+  }, [currentQuery])
 
   const sendFriendRequest = useCallback(async (receiverId: string) => {
     const currentUser = userRef.current

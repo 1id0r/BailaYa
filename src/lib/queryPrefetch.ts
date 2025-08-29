@@ -50,16 +50,16 @@ export const prefetchEvents = async (userId?: string) => {
 
       // Create maps for efficient lookup
       const userCheckinMap = new Map()
-      userCheckins.forEach((checkin: any) => {
+      userCheckins.forEach((checkin) => {
         userCheckinMap.set(checkin.event_id, checkin.status)
       })
 
       const checkinCountsMap = new Map()
-      events.forEach((event: any) => {
+      events.forEach((event) => {
         checkinCountsMap.set(event.id, { going: 0, interested: 0 })
       })
       
-      checkinCounts.forEach((checkin: any) => {
+      checkinCounts.forEach((checkin) => {
         const counts = checkinCountsMap.get(checkin.event_id)
         if (counts) {
           if (checkin.status === 'going') counts.going++
@@ -68,7 +68,7 @@ export const prefetchEvents = async (userId?: string) => {
       })
 
       // Combine data
-      return events.map((event: any) => ({
+      return events.map((event) => ({
         ...event,
         checkinStatus: userCheckinMap.get(event.id) || null,
         checkinCount: checkinCountsMap.get(event.id) || { going: 0, interested: 0 }
@@ -96,7 +96,7 @@ export const prefetchUserEvents = async (userId: string) => {
 
       if (error) throw error
 
-      return (results || []).map((result: any) => ({
+      return (results || []).map((result) => ({
         ...result.event,
         checkinStatus: result.status,
         checkinCount: { going: 0, interested: 0 }

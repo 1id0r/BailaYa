@@ -24,7 +24,7 @@ export function useEvents() {
     queryKey: ['events', user?.id],
     queryFn: async (): Promise<EventWithCheckinStatus[]> => {
       // Use Promise.all to fetch all data in parallel for better performance
-      const promises: [Promise<any>, Promise<any>, Promise<any>] = [
+      const promises = [
         // Fetch events
         supabase
           .from('events')

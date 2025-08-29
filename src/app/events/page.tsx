@@ -2,12 +2,11 @@
 
 import { useState, useMemo } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { Search, Calendar, X, SlidersHorizontal, Sparkles } from 'lucide-react'
+import { Calendar, X } from 'lucide-react'
 import EventCard from '@/components/EventCard'
 import { useEvents } from '@/hooks/useEvents'
 import { LoadingGrid } from '@/components/ui/LoadingSpinner'
 import ErrorMessage from '@/components/ui/ErrorMessage'
-import Input from '@/components/ui/Input'
 import Button from '@/components/ui/Button'
 
 const DANCE_STYLES = [
@@ -112,7 +111,6 @@ export default function EventsPage() {
 
   const clearFilters = () => {
     // Clear URL params
-    const params = new URLSearchParams()
     window.history.pushState({}, '', `/events`)
     // Clear local state
     setSelectedDanceStyles([])

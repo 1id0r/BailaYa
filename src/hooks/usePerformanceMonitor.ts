@@ -38,13 +38,15 @@ export const usePerformanceMonitor = ({
     return () => {
       const unmountTime = performance.now()
       const totalLifetime = unmountTime - mountTimeRef.current
+      const currentMetrics = metricsRef.current
+      const currentRenderCount = renderCountRef.current
 
-      if (totalLifetime > logThreshold || renderCountRef.current > 10) {
+      if (totalLifetime > logThreshold || currentRenderCount > 10) {
         console.group(`🔍 Performance Report: ${componentName}`)
         console.log(`📊 Component Lifetime: ${totalLifetime.toFixed(2)}ms`)
-        console.log(`🔄 Total Renders: ${renderCountRef.current}`)
-        console.log(`⚡ Average Render Time: ${(metricsRef.current.renderTime / renderCountRef.current).toFixed(2)}ms`)
-        console.log(`⏱️ Mount Time: ${metricsRef.current.componentMount.toFixed(2)}ms`)
+        console.log(`🔄 Total Renders: ${currentRenderCount}`)
+        console.log(`⚡ Average Render Time: ${(currentMetrics.renderTime / currentRenderCount).toFixed(2)}ms`)
+        console.log(`⏱️ Mount Time: ${currentMetrics.componentMount.toFixed(2)}ms`)
         console.groupEnd()
       }
     }
