@@ -17,8 +17,20 @@ const Navigation = () => {
   const [showUserMenu, setShowUserMenu] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
   const isEventsPage = pathname === '/events'
-  const [searchTerm, setSearchTerm] = useState(searchParams.get('search') || '')
-  const [showFilters, setShowFilters] = useState(searchParams.get('filters') === 'true')
+  const [searchTerm, setSearchTerm] = useState(() => {
+    try {
+      return searchParams.get('search') || ''
+    } catch {
+      return ''
+    }
+  })
+  const [showFilters, setShowFilters] = useState(() => {
+    try {
+      return searchParams.get('filters') === 'true'
+    } catch {
+      return false
+    }
+  })
 
   // Handle click outside to close menu
   useEffect(() => {
@@ -41,13 +53,22 @@ const Navigation = () => {
   const updateSearchParam = (key: string, value: string) => {
     if (!isEventsPage) return
     
-    const params = new URLSearchParams(searchParams.toString())
-    if (value) {
-      params.set(key, value)
-    } else {
-      params.delete(key)
+    try {
+      const params = new URLSearchParams(searchParams.toString())
+      if (value) {
+        params.set(key, value)
+      } else {
+        params.delete(key)
+      }
+      router.push(`/events?${params.toString()}`)
+    } catch {
+      // If searchParams fails during SSR, just navigate without preserving params
+      const params = new URLSearchParams()
+      if (value) {
+        params.set(key, value)
+      }
+      router.push(`/events?${params.toString()}`)
     }
-    router.push(`/events?${params.toString()}`)
   }
 
   // Handle search term changes

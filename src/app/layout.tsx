@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Providers } from './providers';
-import Navigation from '@/components/Navigation';
+import NavigationWrapper from '@/components/NavigationWrapper';
 import PWAInstallBanner from '@/components/PWAInstallBanner';
 
 const geistSans = Geist({
@@ -88,7 +88,7 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased h-full bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100`}
       >
         <Providers>
-          <Navigation />
+          <NavigationWrapper />
           {children}
           <PWAInstallBanner />
         </Providers>

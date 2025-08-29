@@ -91,7 +91,7 @@ export const useUserSearch = () => {
       const friendRequests = friendRequestsResult.data || []
       const friendships = friendshipsResult.data || []
 
-      const usersWithStatus: UserWithFriendStatus[] = users.map(profile => {
+      const usersWithStatus = users.map(profile => {
         // Check if they're already friends
         const friendship = friendships.find(f => 
           (f.user_id === currentUser.id && f.friend_id === profile.id) ||
@@ -130,15 +130,17 @@ export const useUserSearch = () => {
         return { ...profile, friendStatus: 'none' }
       })
 
-      setSearchResults(usersWithStatus)
+      setSearchResults(usersWithStatus as unknown as UserWithFriendStatus[])
       
       // Cache the results
-      cacheRef.current.set(trimmedQuery, usersWithStatus)
+      cacheRef.current.set(trimmedQuery, usersWithStatus as unknown as UserWithFriendStatus[])
       
       // Limit cache size to prevent memory leaks
       if (cacheRef.current.size > 10) {
         const firstKey = cacheRef.current.keys().next().value
-        cacheRef.current.delete(firstKey)
+        if (firstKey !== undefined) {
+          cacheRef.current.delete(firstKey)
+        }
       }
     } catch (error: unknown) {
       // Don't log abort errors

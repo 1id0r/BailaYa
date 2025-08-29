@@ -146,24 +146,24 @@ export const useFriendsEvents = () => {
       friendCheckins?.forEach(checkin => {
         if (!checkin.event) return
         
-        const eventId = (checkin.event as any).id
+        const eventId = (checkin.event as unknown as { id: string }).id
         if (!eventsMap.has(eventId)) {
           eventsMap.set(eventId, {
-            ...(checkin.event as any),
+            ...(checkin.event as unknown as Event),
             checkinStatus: null, // User hasn't checked in
             checkinCount: { going: 0, interested: 0 },
             friendsGoing: [],
             friendsInterested: [],
-          })
+          } as unknown as EventWithCheckinStatus)
         }
         
         const event = eventsMap.get(eventId)
         if (!event) return
         
         if (checkin.status === 'going') {
-          event.friendsGoing?.push(checkin.user as any)
+          event.friendsGoing?.push(checkin.user as unknown as UserProfile)
         } else {
-          event.friendsInterested?.push(checkin.user as any)
+          event.friendsInterested?.push(checkin.user as unknown as UserProfile)
         }
       })
 

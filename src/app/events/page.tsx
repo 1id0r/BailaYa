@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { Calendar, X } from 'lucide-react'
 import EventCard from '@/components/EventCard'
@@ -36,7 +36,7 @@ const SORT_OPTIONS = [
 type SortOption = 'date' | 'popularity' | 'alphabetical'
 type DateFilter = 'all' | 'today' | 'week' | 'month'
 
-export default function EventsPage() {
+function EventsContent() {
   const searchParams = useSearchParams()
   const searchTerm = searchParams.get('search') || ''
   const showFilters = searchParams.get('filters') === 'true'
@@ -316,5 +316,19 @@ export default function EventsPage() {
         )}
       </div>
     </div>
+  )
+}
+
+export default function EventsPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-background">
+        <div className="max-w-4xl mx-auto px-4 py-6">
+          <LoadingGrid count={4} />
+        </div>
+      </div>
+    }>
+      <EventsContent />
+    </Suspense>
   )
 }
